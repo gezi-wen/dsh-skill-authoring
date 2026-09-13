@@ -1,0 +1,13 @@
+{
+  "name": "dsh-skill-authoring",
+  "description": "Ships a skill that documents how to write, review and verify DSH skills: SKILL.md frontmatter rules, how to phrase a description so it triggers, length and splitting guidance, and an A/B check that the skill actually changes agent behaviour.",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "files": ["cordis.patch.yml", "skills"],
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "peerDependencies": { "@deepseek-ai/cordis": "*", "@deepseek-ai/dsh-skill-filesystem": "*" },
+  "keywords": ["dsh", "deepseek-harness", "plugin", "skill", "authoring", "writing"],
+  "repository": { "type": "git", "url": "git+https://github.com/gezi-wen/dsh-skill-authoring.git" },
+  "homepage": "https://github.com/gezi-wen/dsh-skill-authoring#readme"
+}

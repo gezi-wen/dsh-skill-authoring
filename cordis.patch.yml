@@ -1,0 +1,19 @@
+# dsh-skill-authoring bundle patch
+#
+# Registers this package's own `skills/` directory as an extra skill root, so
+# installing the plugin is what puts the skill in place.
+#
+# `providerName` must be unique per package: the skill registry rejects a second
+# provider under the same name, so the default ("filesystem") collides with the
+# harness' own provider and with any other plugin built on this mechanism.
+# `includeDefaultRoots: false` keeps this provider to its own directory, since
+# the harness' default provider already scans the project and user roots.
+
+- insert:
+    - id: dsh-skill-authoring-skills
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: dsh-skill-authoring
+        includeDefaultRoots: false
+        customSkillDirs:
+          - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))"
