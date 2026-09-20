@@ -1,7 +1,7 @@
 {
   "name": "dsh-skill-authoring",
   "description": "Ships a skill that documents how to write, review and verify DSH skills: SKILL.md frontmatter rules, how to phrase a description so it triggers, length and splitting guidance, and an A/B check that the skill actually changes agent behaviour.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "license": "MIT",
   "files": ["cordis.patch.yml", "skills"],
