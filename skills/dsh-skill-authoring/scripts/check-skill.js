@@ -8,12 +8,7 @@
  *
  * 用法：
  *   node check-skill.js <技能目录>
- *   node check-skill.js <技能根目录>        # 逐个校验其下带 SKILL.md 的子目录
- *   node check-skill.js                    # 不给参数：DSH_SKILL_DIR 环境变量 → 当前目录
- *   node check-skill.js <目录> --json
- *
- * 路径不写死：位置参数给到哪就查哪，不给就读 DSH_SKILL_DIR，再退到当前工作目录。
- * 脚本只读，不修改任何文件。
+ *   node check-skill.js <技能目录> --json
  *
  * 退出码：0 = 全过；1 = 有问题；2 = 用法错误。
  *
@@ -37,11 +32,10 @@ const BOOL_FIELDS = ['disable-model-invocation', 'user-invocable'];
 const LINECOUNT_MIN = 300;
 const LINECOUNT_MAX = 500;
 
-const USAGE = `用法: node check-skill.js [<技能目录 | 技能根目录>] [--json]
-
-  位置参数省略时，按 DSH_SKILL_DIR 环境变量 → 当前工作目录 依次取值。
-  目标里有 SKILL.md 就按单个技能校验；没有就把它当技能根目录，
-  逐个校验其下带 SKILL.md 的子目录（跳过隐藏目录与 node_modules）。`;
+const problems = [];
+const notes = [];
+const fail = (msg) => problems.push(msg);
+const note = (msg) => notes.push(msg);
 
 /** 找一个可用的 YAML 解析器；找不到就返回 null（走内置最小解析器） */
 function loadYaml() {
@@ -115,34 +109,21 @@ function sectionToken(heading) {
   return m ? m[1] : null;
 }
 
-/**
- * 把一个技能根目录展开成技能目录列表。
- * 目标目录顶层有 SKILL.md → 它自己就是一个技能；否则找它下面第一层带 SKILL.md 的子目录。
- */
-function findSkillDirs(target) {
-  if (fs.existsSync(path.join(target, 'SKILL.md'))) return [target];
-  let entries;
-  try { entries = fs.readdirSync(target); } catch (e) { return []; }
-  const dirs = [];
-  for (const name of entries) {
-    if (name.startsWith('.') || name === 'node_modules') continue;
-    const p = path.join(target, name);
-    try {
-      if (fs.statSync(p).isDirectory() && fs.existsSync(path.join(p, 'SKILL.md'))) dirs.push(p);
-    } catch (e) { /* 读不到的条目直接跳过 */ }
+function main() {
+  const args = process.argv.slice(2);
+  const json = args.includes('--json');
+  const dir = args.find((a) => !a.startsWith('--'));
+  if (!dir) {
+    console.error('用法: node check-skill.js <技能目录> [--json]');
+    process.exit(2);
   }
-  return dirs.sort();
-}
-
-/** 校验单个技能目录，返回报告对象（不打印、不退出） */
-function checkSkill(dir) {
-  const problems = [];
-  const notes = [];
-  const fail = (msg) => problems.push(msg);
-  const note = (msg) => notes.push(msg);
-
   const skillDir = path.resolve(dir);
   const skillFile = path.join(skillDir, 'SKILL.md');
+  if (!fs.existsSync(skillFile)) {
+    console.error(`找不到 ${skillFile}`);
+    process.exit(2);
+  }
+
   const raw = fs.readFileSync(skillFile, 'utf8');
   const dirName = path.basename(skillDir);
 
@@ -235,8 +216,8 @@ function checkSkill(dir) {
   if (n < LINECOUNT_MIN) note(`SKILL.md ${n} 行，低于建议区间 ${LINECOUNT_MIN}-${LINECOUNT_MAX}（先想清楚有没有漏边界情况；内容确实完整就别为凑数字注水）`);
   if (n > LINECOUNT_MAX) fail(`SKILL.md ${n} 行，超过建议上限 ${LINECOUNT_MAX} —— 该拆 references/ 了`);
 
-  // ── 报告 ───────────────────────────────────────────────────────
-  return {
+  // ── 输出 ───────────────────────────────────────────────────────
+  const report = {
     skill: dirName,
     file: skillFile,
     lines: n,
@@ -249,57 +230,23 @@ function checkSkill(dir) {
     notes,
     ok: problems.length === 0,
   };
-}
-
-/** 打印单个技能的报告（单技能与多技能模式共用，保持人读格式一致） */
-function printReport(r) {
-  console.log(`技能 ${r.skill}  (${r.lines} 行，解析器：${r.parser})`);
-  console.log(`  字段 ${r.frontmatter ? Object.keys(r.frontmatter).length : 0} · 锚点 ${r.anchors} · 文件引用 ${r.fileRefs} · §引用 ${r.secRefs}`);
-  if (r.problems.length) {
-    console.log('\n  ❌ 问题：');
-    for (const p of r.problems) console.log('     · ' + p);
-  }
-  if (r.notes.length) {
-    console.log('\n  ⚠️  提醒：');
-    for (const m of r.notes) console.log('     · ' + m);
-  }
-  console.log(r.problems.length ? '\n结论：有问题' : '\n结论：通过 ✅');
-}
-
-function main() {
-  const args = process.argv.slice(2);
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(USAGE);
-    process.exit(0);
-  }
-  const json = args.includes('--json');
-  const dir = args.find((a) => !a.startsWith('--'));
-  const target = path.resolve(dir || process.env.DSH_SKILL_DIR || process.cwd());
-  if (!fs.existsSync(target)) {
-    console.error(`找不到 ${target}`);
-    console.error(USAGE);
-    process.exit(2);
-  }
-
-  const dirs = findSkillDirs(target);
-  if (dirs.length === 0) {
-    console.error(`在 ${target} 里没找到技能（顶层没有 SKILL.md，下一层子目录也没有）`);
-    console.error(USAGE);
-    process.exit(2);
-  }
-
-  const reports = dirs.map(checkSkill);
-  const failed = reports.filter((r) => !r.ok).length;
 
   if (json) {
-    console.log(JSON.stringify(reports.length === 1 ? reports[0] : reports, null, 2));
+    console.log(JSON.stringify(report, null, 2));
   } else {
-    reports.forEach(printReport);
-    if (reports.length > 1) {
-      console.log(`\n共 ${reports.length} 个技能，其中 ${failed} 个有问题。`);
+    console.log(`技能 ${dirName}  (${n} 行，解析器：${parserUsed})`);
+    console.log(`  字段 ${meta ? Object.keys(meta).length : 0} · 锚点 ${anchors.length} · 文件引用 ${fileRefs.length} · §引用 ${secRefs.length}`);
+    if (problems.length) {
+      console.log('\n  ❌ 问题：');
+      for (const p of problems) console.log('     · ' + p);
     }
+    if (notes.length) {
+      console.log('\n  ⚠️  提醒：');
+      for (const m of notes) console.log('     · ' + m);
+    }
+    console.log(problems.length ? '\n结论：有问题' : '\n结论：通过 ✅');
   }
-  process.exit(failed ? 1 : 0);
+  process.exit(problems.length ? 1 : 0);
 }
 
 main();
